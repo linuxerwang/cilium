@@ -15,6 +15,8 @@
 package identity
 
 import (
+	"net"
+
 	"github.com/cilium/cilium/api/v1/models"
 	"github.com/cilium/cilium/pkg/labels"
 )
@@ -28,6 +30,13 @@ type Identity struct {
 	Labels labels.Labels `json:"labels"`
 	// SHA256 of labels.
 	LabelsSHA256 string `json:"labelsSHA256"`
+}
+
+// IPIdentityPair is a pairing of an IP and the security identity to which that
+// IP corresponds.
+type IPIdentityPair struct {
+	IP net.IP
+	ID NumericIdentity
 }
 
 func NewIdentityFromModel(base *models.Identity) *Identity {

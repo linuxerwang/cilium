@@ -53,6 +53,7 @@ import (
 	"github.com/cilium/cilium/pkg/workloads"
 	"github.com/cilium/cilium/pkg/workloads/containerd"
 
+	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/go-openapi/loads"
 	gops "github.com/google/gops/agent"
 	go_version "github.com/hashicorp/go-version"
@@ -88,6 +89,7 @@ var (
 	// autoIPv6NodeRoutes automatically adds L3 direct routing when using direct mode (-d)
 	autoIPv6NodeRoutes    bool
 	bpfRoot               string
+	clusterName           string
 	cmdRefDir             string
 	containerRuntimes     []string
 	debugVerboseFlags     []string
@@ -317,6 +319,8 @@ func init() {
 		"auto-ipv6-node-routes", false, "Automatically adds IPv6 L3 routes to reach other nodes for non-overlay mode (--device) (BETA)")
 	flags.StringVar(&bpfRoot,
 		"bpf-root", "", "Path to BPF filesystem")
+	flags.StringVar(&clusterName,
+		"cluster-name", "default", "Name of cluster in which this agent is running")
 	flags.StringVar(&cfgFile,
 		"config", "", `Configuration file (default "$HOME/ciliumd.yaml")`)
 	flags.StringSliceVar(&containerRuntimes,
@@ -604,6 +608,8 @@ func initEnv(cmd *cobra.Command) {
 	}
 
 	bpf.MountFS()
+
+	ipcache.AddressSpace = clusterName
 
 	logging.DefaultLogLevel = defaults.DefaultLogLevel
 	config.Opts.Set(endpoint.OptionDebug, viper.GetBool("debug"))

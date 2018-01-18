@@ -21,6 +21,7 @@ cilium-agent
       --allow-localhost string            Policy when to allow local stack to reach local endpoints { auto | always | policy }  (default "auto")
       --auto-ipv6-node-routes             Automatically adds IPv6 L3 routes to reach other nodes for non-overlay mode (--device) (BETA)
       --bpf-root string                   Path to BPF filesystem
+      --cluster-name string               Name of cluster in which this agent is running (default "default")
       --config string                     Configuration file (default "$HOME/ciliumd.yaml")
       --container-runtime stringSlice     Sets the container runtime(s) used by Cilium { docker | none | auto }" (default [auto])
       --container-runtime-endpoint map    Container runtime(s) endpoint(s). (default: --container-runtime-endpoint=docker=unix:///var/run/docker.sock) (default map[])
