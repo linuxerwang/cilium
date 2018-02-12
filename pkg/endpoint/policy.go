@@ -75,6 +75,14 @@ func (e *Endpoint) allowIngressIdentity(owner Owner, id identityPkg.NumericIdent
 	return e.Consumable.AllowIngressIdentityLocked(policy.GetConsumableCache(), id)
 }
 
+// allowEgressConsumer allows security identity id to be communicated to by
+// this endpoint by updating the endpoint's Consumable.
+// Must be called with global endpoint.Mutex held.
+func (e *Endpoint) allowEgressIdentity(owner Owner, id identityPkg.NumericIdentity) bool {
+	cache := policy.GetConsumableCache()
+	return e.Consumable.AllowEgressIdentityLocked(cache, id)
+}
+
 // ProxyID returns a unique string to identify a proxy mapping
 func (e *Endpoint) ProxyID(l4 *policy.L4Filter) string {
 	direction := "ingress"
@@ -116,7 +124,7 @@ func (e *Endpoint) removeOldFilter(owner Owner, labelsMap *identityPkg.IdentityC
 			if _, ok := fromEndpointsSrcIDs[id]; !ok {
 				fromEndpointsSrcIDs[id] = policy.NewL4RuleContexts()
 			}
-			if err := e.PolicyMap.DeleteL4(srcID, port, proto); err != nil {
+			if err := e.PolicyMap.DeleteL4(srcID, port, proto, policy.Ingress.Uint8()); err != nil {
 				// This happens when the policy would add
 				// multiple copies of the same L4 policy. Only
 				// one of them is actually added, but we'll
@@ -159,7 +167,7 @@ func (e *Endpoint) applyNewFilter(owner Owner, labelsMap *identityPkg.IdentityCa
 	for _, sel := range filter.FromEndpoints {
 		for _, id := range getSecurityIdentities(labelsMap, &sel) {
 			srcID := id.Uint32()
-			if e.PolicyMap.L4Exists(srcID, port, proto) {
+			if e.PolicyMap.L4Exists(srcID, port, proto, policy.Ingress.Uint8()) {
 				e.getLogger().WithField("l4Filter", filter).Debug("L4 filter exists")
 				continue
 			}
@@ -167,7 +175,7 @@ func (e *Endpoint) applyNewFilter(owner Owner, labelsMap *identityPkg.IdentityCa
 			if _, ok := fromEndpointsSrcIDs[id]; !ok {
 				fromEndpointsSrcIDs[id] = policy.NewL4RuleContexts()
 			}
-			if err := e.PolicyMap.AllowL4(srcID, port, proto); err != nil {
+			if err := e.PolicyMap.AllowL4(srcID, port, proto, policy.Ingress.Uint8()); err != nil {
 				e.getLogger().WithFields(logrus.Fields{
 					logfields.PolicyID: srcID,
 					logfields.Port:     port,
@@ -302,6 +310,10 @@ func (e *Endpoint) regenerateConsumable(owner Owner, labelsMap *identityPkg.Iden
 		c.IngressIdentities[ingressIdentity] = false
 	}
 
+	for egressIdentity := range c.EgressIdentities {
+		c.EgressIdentities[egressIdentity] = false
+	}
+
 	rulesAdd = policy.NewSecurityIDContexts()
 	rulesRm = policy.NewSecurityIDContexts()
 
@@ -428,15 +440,17 @@ func (e *Endpoint) regenerateConsumable(owner Owner, labelsMap *identityPkg.Iden
 			"labels":             labels,
 		}).Debugf("egress verdict: %v", egressAccess)
 
-		// TODO (ianvernon) plumb egress verdict into endpoint structure
 		if egressAccess == api.Allowed {
 			e.getLogger().WithFields(logrus.Fields{
 				logfields.PolicyID: identity,
 				"ctx":              ingressCtx}).Debug("egress allowed")
+			if e.allowEgressIdentity(owner, identity) {
+				changed = true
+			}
 		}
 	}
 
-	// Garbage collect all unused entries
+	// Garbage collect all unused entries for both ingress and egress.
 	for ingressIdentity, keepIdentity := range c.IngressIdentities {
 		if !keepIdentity {
 			c.RemoveIngressIdentityLocked(ingressIdentity)
@@ -462,6 +476,14 @@ func (e *Endpoint) regenerateConsumable(owner Owner, labelsMap *identityPkg.Iden
 		}
 	}
 
+	for egressIdentity, keepIdentity := range c.EgressIdentities {
+		if !keepIdentity {
+			c.RemoveEgressIdentityLocked(egressIdentity)
+			changed = true
+			// TODO (ianvernon): conntrack work for egress.
+		}
+	}
+
 	if rulesAdd != nil {
 		rulesAddCpy := rulesAdd.DeepCopy() // Store the L3-L4 policy
 		c.L3L4Policy = &rulesAddCpy
@@ -470,6 +492,7 @@ func (e *Endpoint) regenerateConsumable(owner Owner, labelsMap *identityPkg.Iden
 	e.getLogger().WithFields(logrus.Fields{
 		logfields.Identity:          c.ID,
 		"ingressSecurityIdentities": logfields.Repr(c.IngressIdentities),
+		"egressSecurityIdentities":  logfields.Repr(c.EgressIdentities),
 		"rulesAdd":                  rulesAdd,
 		"l4Rm":                      l4Rm,
 		"rulesRm":                   rulesRm,
@@ -548,7 +571,7 @@ func (e *Endpoint) regeneratePolicy(owner Owner, opts models.ConfigurationMap) (
 	// This can be cleaned up once we shift all bpf updates to regenerateBPF().
 	if e.PolicyMap == nil && !owner.DryModeEnabled() {
 		// First run always results in bpf generation
-		// L4 policy generation assumes e.PolicyMp to exist, but it is only created
+		// L4 policy generation assumes e.PolicyMap to exist, but it is only created
 		// when bpf is generated for the first time. Until then we can't really compute
 		// the policy. Bpf generation calls us again after PolicyMap is created.
 		// In dry mode we are called with a nil PolicyMap.
@@ -611,7 +634,7 @@ func (e *Endpoint) regeneratePolicy(owner Owner, opts models.ConfigurationMap) (
 
 	// Skip L4 policy recomputation for this consumable if already valid.
 	// Rest of the policy computation still needs to be done for each endpoint
-	// separately even thought the consumable may be shared between them.
+	// separately even though the consumable may be shared between them.
 	if c.Iteration != revision {
 		err = e.resolveL4Policy(owner, repo, c)
 		if err != nil {
@@ -666,6 +689,7 @@ func (e *Endpoint) regeneratePolicy(owner Owner, opts models.ConfigurationMap) (
 
 	optsChanged := e.applyOptsLocked(opts)
 
+	// Determines all security-identity based policy.
 	policyChanged2, consumersAdd, consumersRm := e.regenerateConsumable(owner, labelsMap, repo, c)
 	if policyChanged2 {
 		policyChanged = true

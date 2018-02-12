@@ -48,10 +48,10 @@ func (pe *PolicyEntry) String() string {
 }
 
 type policyKey struct {
-	Identity uint32
-	DestPort uint16 // In network byte-order
-	Nexthdr  uint8
-	Pad      uint8
+	Identity         uint32
+	DestPort         uint16 // In network byte-order
+	Nexthdr          uint8
+	TrafficDirection uint8
 }
 
 type PolicyEntry struct {
@@ -71,32 +71,40 @@ type PolicyEntryDump struct {
 	Key policyKey
 }
 
+// TODO (ianvernon) update key for traffic direction
 func (key *policyKey) String() string {
-	if key.DestPort != 0 {
-		return fmt.Sprintf("%d %d/%d", key.Identity, byteorder.NetworkToHost(key.DestPort), key.Nexthdr)
+	trafficDirectionString := ""
+	// Egress
+	if key.TrafficDirection == 0 {
+		trafficDirectionString = "Egress"
+	} else {
+		trafficDirectionString = "Ingress"
 	}
-	return fmt.Sprintf("%d", key.Identity)
+	if key.DestPort != 0 {
+		return fmt.Sprintf("%s: %d %d/%d", trafficDirectionString, key.Identity, byteorder.NetworkToHost(key.DestPort), key.Nexthdr)
+	}
+	return fmt.Sprintf("%s: %d", trafficDirectionString, key.Identity)
 }
 
 // AllowIdentity adds an entry into the PolicyMap with key id. Returns an error
 // if the addition did not complete successfully.
-func (pm *PolicyMap) AllowIdentity(id uint32) error {
-	key := policyKey{Identity: id}
+func (pm *PolicyMap) AllowIdentity(id uint32, trafficDirection uint8) error {
+	key := policyKey{Identity: id, TrafficDirection: trafficDirection}
 	entry := PolicyEntry{}
 	return bpf.UpdateElement(pm.Fd, unsafe.Pointer(&key), unsafe.Pointer(&entry), 0)
 }
 
 // AllowL4 pushes an entry into the PolicyMap to allow source identity `id`
 // send traffic with destination port `dport` over protocol `proto`.
-func (pm *PolicyMap) AllowL4(id uint32, dport uint16, proto uint8) error {
-	key := policyKey{Identity: id, DestPort: byteorder.HostToNetwork(dport).(uint16), Nexthdr: proto}
+func (pm *PolicyMap) AllowL4(id uint32, dport uint16, proto uint8, trafficDirection uint8) error {
+	key := policyKey{Identity: id, DestPort: byteorder.HostToNetwork(dport).(uint16), Nexthdr: proto, TrafficDirection: trafficDirection}
 	entry := PolicyEntry{}
 	return bpf.UpdateElement(pm.Fd, unsafe.Pointer(&key), unsafe.Pointer(&entry), 0)
 }
 
 // IdentityExists returns whether there is an entry in the PolicyMap with key id.
-func (pm *PolicyMap) IdentityExists(id uint32) bool {
-	key := policyKey{Identity: id}
+func (pm *PolicyMap) IdentityExists(id uint32, trafficDirection uint8) bool {
+	key := policyKey{Identity: id, TrafficDirection: trafficDirection}
 	var entry PolicyEntry
 	return bpf.LookupElement(pm.Fd, unsafe.Pointer(&key), unsafe.Pointer(&entry)) == nil
 }
@@ -104,23 +112,23 @@ func (pm *PolicyMap) IdentityExists(id uint32) bool {
 // L4Exists determines whether PolicyMap currently contains an entry that
 // allows source identity `id` send traffic with destination port `dport` over
 // protocol `proto`.
-func (pm *PolicyMap) L4Exists(id uint32, dport uint16, proto uint8) bool {
-	key := policyKey{Identity: id, DestPort: byteorder.HostToNetwork(dport).(uint16), Nexthdr: proto}
+func (pm *PolicyMap) L4Exists(id uint32, dport uint16, proto uint8, trafficDirection uint8) bool {
+	key := policyKey{Identity: id, DestPort: byteorder.HostToNetwork(dport).(uint16), Nexthdr: proto, TrafficDirection: trafficDirection}
 	var entry PolicyEntry
 	return bpf.LookupElement(pm.Fd, unsafe.Pointer(&key), unsafe.Pointer(&entry)) == nil
 }
 
 // DeleteIdentity deletes id from the PolicyMap. Returns an error if the deletion
 // did not succeed.
-func (pm *PolicyMap) DeleteIdentity(id uint32) error {
-	key := policyKey{Identity: id}
+func (pm *PolicyMap) DeleteIdentity(id uint32, trafficDirection uint8) error {
+	key := policyKey{Identity: id, TrafficDirection: trafficDirection}
 	return bpf.DeleteElement(pm.Fd, unsafe.Pointer(&key))
 }
 
 // DeleteL4 removes an entry from the PolicyMap for source identity `id`
 // sending traffic with destination port `dport` over protocol `proto`.
-func (pm *PolicyMap) DeleteL4(id uint32, dport uint16, proto uint8) error {
-	key := policyKey{Identity: id, DestPort: byteorder.HostToNetwork(dport).(uint16), Nexthdr: proto}
+func (pm *PolicyMap) DeleteL4(id uint32, dport uint16, proto uint8, trafficDirection uint8) error {
+	key := policyKey{Identity: id, DestPort: byteorder.HostToNetwork(dport).(uint16), Nexthdr: proto, TrafficDirection: trafficDirection}
 	return bpf.DeleteElement(pm.Fd, unsafe.Pointer(&key))
 }
 
