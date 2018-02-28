@@ -262,14 +262,6 @@ func getInt64(i int64) *int64 {
 var (
 	crv = apiextensionsv1beta1.CustomResourceValidation{
 		OpenAPIV3Schema: &apiextensionsv1beta1.JSONSchemaProps{
-			OneOf: []apiextensionsv1beta1.JSONSchemaProps{
-				{
-					Required: []string{"spec"},
-				},
-				{
-					Required: []string{"specs"},
-				},
-			},
 			Properties: properties,
 		},
 	}
