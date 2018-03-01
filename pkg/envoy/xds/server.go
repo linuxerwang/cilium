@@ -170,6 +170,11 @@ type perTypeStreamState struct {
 	// resource type.
 	nonce string
 
+	// version is the last version sent. This is needed so that we'll know
+	// if a new request is an ACK (VersionInfo matches current version), or a NACK
+	// (VersionInfo matches an earlier version).
+	version uint64
+
 	// resourceNames is the list of names of resources sent in the last
 	// response to a request for this resource type.
 	resourceNames []string
@@ -295,20 +300,29 @@ func (s *Server) processRequestStream(ctx context.Context, streamLog *logrus.Ent
 			// the last response yet. Ignore every request until it processes
 			// that response and sends a request with that response's nonce.
 			if state.nonce == "" || state.nonce == req.GetResponseNonce() {
-				if state.pendingWatchCancel != nil {
-					// A pending watch exists for this type URL. Cancel it to
-					// start a new watch.
-					requestLog.Debug("canceling pending watch")
-					state.pendingWatchCancel()
-				} else if versionInfo != nil {
-					// If no pending watch exists, then this request is an ACK
-					// for the last response for this resource type.
+				if versionInfo != nil && *versionInfo == state.version {
+					// This request is an ACK.
 					// Notify every observer of the ACK.
 					ackObserver := s.ackObservers[typeURL]
 					if ackObserver != nil {
 						requestLog.Debug("notifying observers of ACK")
 						ackObserver.HandleResourceVersionAck(*versionInfo, req.GetNode(), state.resourceNames, typeURL)
+					} else {
+						requestLog.Debug("ACK received but no observers are waiting for ACKs")
 					}
+				} else if versionInfo != nil {
+					requestLog.Debug("NACK received for version ", state.version, " waiting for a version update before sending again")
+					// Watcher will behave as if the sent version was acked.
+					// Otherwise we will just be sending the same failing
+					// version over and over filling logs.
+					*versionInfo = state.version
+				}
+
+				if state.pendingWatchCancel != nil {
+					// A pending watch exists for this type URL. Cancel it to
+					// start a new watch.
+					requestLog.Debug("canceling pending watch")
+					state.pendingWatchCancel()
 				}
 
 				respCh := make(chan *VersionedResources, 1)
@@ -381,6 +395,7 @@ func (s *Server) processRequestStream(ctx context.Context, streamLog *logrus.Ent
 			}
 
 			state.nonce = nonce
+			state.version = resp.Version
 			state.resourceNames = resp.ResourceNames
 		}
 	}
