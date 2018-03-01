@@ -73,7 +73,7 @@ func (s *EnvoySuite) TestEnvoy(c *C) {
 	log.Debugf("state log directory: %s", stateLogDir)
 
 	// launch debug variant of the Envoy proxy
-	Envoy := StartEnvoy(9942, stateLogDir, stateLogDir, 42)
+	Envoy := StartEnvoy(9942, stateLogDir, filepath.Join(stateLogDir, "cilium-envoy.log"), 42)
 	c.Assert(Envoy, NotNil)
 	log.Debug("started Envoy")
 
