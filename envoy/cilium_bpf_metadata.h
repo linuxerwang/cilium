@@ -8,6 +8,7 @@
 
 #include "cilium/cilium_bpf_metadata.pb.h"
 #include "proxymap.h"
+#include "cilium_network_policy.h"
 
 namespace Envoy {
 namespace Filter {
@@ -36,7 +37,7 @@ struct BpfStats {
  */
 class Config : Logger::Loggable<Logger::Id::config> {
 public:
-  Config(const ::cilium::BpfMetadata &config, Stats::Scope &scope);
+  Config(const ::cilium::BpfMetadata &config, Stats::Scope &scope, const std::shared_ptr<Cilium::NetworkPolicyMap>);
 
   uint32_t getMark(uint32_t identity) {
     // Magic marker values must match with Cilium.
@@ -51,6 +52,7 @@ public:
   bool is_ingress_;
   uint32_t identity_;
   Cilium::ProxyMap maps_;
+  const std::shared_ptr<Cilium::NetworkPolicyMap> npmap_;
 };
 
 typedef std::shared_ptr<Config> ConfigSharedPtr;

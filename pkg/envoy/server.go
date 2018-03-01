@@ -153,6 +153,10 @@ func createXDSServer(path, accessLogPath string) *XDSServer {
 				"is_ingress": {&structpb.Value_BoolValue{BoolValue: false}},
 				"bpf_root":   {&structpb.Value_StringValue{StringValue: "/sys/fs/bpf"}},
 				"identity":   {&structpb.Value_NumberValue{NumberValue: float64(0)}},
+				"api_config_source": {&structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+					"api_type":      {&structpb.Value_NumberValue{NumberValue: float64(envoy_api_v2_core.ApiConfigSource_GRPC)}},
+					"cluster_names": {&structpb.Value_StringValue{StringValue: "xdsCluster"}},
+				}}}},
 			}},
 		}},
 	}
@@ -410,9 +414,14 @@ func getPortNetworkPolicyRule(sel api.EndpointSelector, l7Parser policy.L7Parser
 	allowedIdentities identity.IdentityCache) *cilium.PortNetworkPolicyRule {
 	var remotePolicies []uint64
 	for id, labels := range allowedIdentities {
+		log.Debug("Envoy: CHECKING IF ", sel, " MATCHES labels: ", labels, " of ID: ", id)
 		if sel.Matches(labels) {
 			remotePolicies = append(remotePolicies, uint64(id))
 		}
+	}
+	if len(remotePolicies) == 0 {
+		log.Debug("Envoy: No ID matches endpoint selector: ", sel)
+		return nil
 	}
 	sortkeys.Uint64s(remotePolicies)
 

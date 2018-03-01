@@ -16,6 +16,9 @@ load(
 api_proto_library(
     name = "cilium_bpf_metadata",
     srcs = ["cilium/cilium_bpf_metadata.proto"],
+    deps = [
+        "@envoy_api//envoy/api/v2/core:config_source",
+    ],
 )
 
 api_proto_library(
@@ -46,7 +49,7 @@ api_proto_library(
     deps = [
         "@envoy_api//envoy/api/v2:discovery",
         "@envoy_api//envoy/api/v2/core:address",
-        "@envoy_api//envoy/api/v2/route",
+        "@envoy_api//envoy/api/v2/route:route",
     ],
 )
 
@@ -83,11 +86,13 @@ envoy_cc_library(
     srcs = [
         "bpf.cc",
         "cilium_bpf_metadata.cc",
+        "cilium_network_policy.cc",
         "proxymap.cc",
     ],
     hdrs = [
         "bpf.h",
         "cilium_bpf_metadata.h",
+        "cilium_network_policy.h",
         "linux/bpf.h",
         "linux/bpf_common.h",
         "linux/type_mapper.h",
@@ -103,7 +108,11 @@ envoy_cc_library(
         "@envoy//source/common/common:assert_lib",
         "@envoy//source/common/common:logger_lib",
         "@envoy//source/common/network:address_lib",
+        "@envoy//source/common/config:subscription_factory_lib",
+        "@envoy//include/envoy/config:subscription_interface",
+        "@envoy//source/common/local_info:local_info_lib",
         ":cilium_bpf_metadata_cc",
+        ":npds_cc",
     ],
 )
 

@@ -23,7 +23,7 @@ namespace BpfMetadata {
 class TestConfig : public Config {
 public:
   TestConfig(const ::cilium::BpfMetadata& config, Stats::Scope& scope)
-    : Config(config, scope),
+    : Config(config, scope, nullptr),
       socket_mark_(std::make_shared<Cilium::SocketMarkOption>(42)) {}
 
   Network::Socket::OptionsSharedPtr socket_mark_;
@@ -64,7 +64,8 @@ public:
   createFilterFactoryFromProto(const Protobuf::Message& proto_config,
                       ListenerFactoryContext &context) override {
     Filter::BpfMetadata::TestConfigSharedPtr config(
-        new Filter::BpfMetadata::TestConfig(MessageUtil::downcastAndValidate<const ::cilium::BpfMetadata&>(proto_config), context.scope()));
+        new Filter::BpfMetadata::TestConfig(MessageUtil::downcastAndValidate<const ::cilium::BpfMetadata&>(proto_config),
+					    context.scope()));
 
     return [config](
                Network::ListenerFilterManager &filter_manager) mutable -> void {
@@ -99,15 +100,23 @@ admin:
       port_value: 0
 static_resources:
   clusters:
-    name: cluster1
+  - name: cluster1
     type: ORIGINAL_DST
     lb_policy: ORIGINAL_DST_LB
     connect_timeout:
       seconds: 1
     hosts:
-      socket_address:
+    - socket_address:
         address: 127.0.0.1
         port_value: 0
+  - name: xds_cluster
+    connect_timeout: { seconds: 5 }
+    type: STATIC
+    lb_policy: ROUND_ROBIN
+    http2_protocol_options: {}
+    hosts:
+    - pipe:
+        path: /var/run/cilium/xds.sock
   listeners:
     name: http
     address:
@@ -117,7 +126,9 @@ static_resources:
     listener_filters:
       name: test_bpf_metadata
       config:
-        bpf_root: /
+        api_config_source:
+          api_type: GRPC
+          cluster_names: xds_cluster
     filter_chains:
       filters:
         name: envoy.http_connection_manager
@@ -180,7 +191,7 @@ public:
   void initialize() override {
     BaseIntegrationTest::initialize();
     // Pass the fake upstream address to the cilium bpf filter that will set it as an "original destiantion address".
-    original_dst_address = fake_upstreams_.front()->localAddress();
+    original_dst_address = fake_upstreams_.back()->localAddress();
   }
 
   void Denied(Http::TestHeaderMapImpl headers) {

@@ -6,7 +6,7 @@ package cilium
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import envoy_api_v2_core "github.com/cilium/cilium/pkg/envoy/envoy/api/v2/core"
+import envoy_api_v2_core3 "github.com/cilium/cilium/pkg/envoy/envoy/api/v2/core"
 import envoy_api_v2 "github.com/cilium/cilium/pkg/envoy/envoy/api/v2"
 import envoy_api_v2_route "github.com/cilium/cilium/pkg/envoy/envoy/api/v2/route"
 import _ "google.golang.org/genproto/googleapis/api/annotations"
@@ -89,7 +89,7 @@ type PortNetworkPolicy struct {
 	Port uint32 `protobuf:"varint,1,opt,name=port" json:"port,omitempty"`
 	// The flows' L4 transport protocol.
 	// Required.
-	Protocol envoy_api_v2_core.SocketAddress_Protocol `protobuf:"varint,2,opt,name=protocol,enum=envoy.api.v2.core.SocketAddress_Protocol" json:"protocol,omitempty"`
+	Protocol envoy_api_v2_core3.SocketAddress_Protocol `protobuf:"varint,2,opt,name=protocol,enum=envoy.api.v2.core.SocketAddress_Protocol" json:"protocol,omitempty"`
 	// The network policy rules to be enforced on the flows to the port.
 	// A flow is allowed if any rule matches it. If no rule matches the flow, it is denied.
 	// Required and may not be empty.
@@ -108,11 +108,11 @@ func (m *PortNetworkPolicy) GetPort() uint32 {
 	return 0
 }
 
-func (m *PortNetworkPolicy) GetProtocol() envoy_api_v2_core.SocketAddress_Protocol {
+func (m *PortNetworkPolicy) GetProtocol() envoy_api_v2_core3.SocketAddress_Protocol {
 	if m != nil {
 		return m.Protocol
 	}
-	return envoy_api_v2_core.SocketAddress_TCP
+	return envoy_api_v2_core3.SocketAddress_TCP
 }
 
 func (m *PortNetworkPolicy) GetRules() []*PortNetworkPolicyRule {
