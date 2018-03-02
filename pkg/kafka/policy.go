@@ -188,8 +188,16 @@ func (req *RequestMessage) ruleMatches(rule api.PortRuleKafka) bool {
 		fieldRule:    rule,
 	}), "Matching Kafka rule")
 
-	apiKey, isWildcard := rule.GetAPIKey()
-	if !isWildcard && apiKey != req.kind {
+	if rule.APIKey != "" && rule.Role != "" {
+		flowdebug.Log(log.WithFields(logrus.Fields{
+			fieldRequest: req.String(),
+			fieldRule:    rule,
+		}), "Both APIKey and Role are specified")
+		return false
+	}
+	//TODO -1??
+	apiKey, isWildcard := rule.CheckApiKeyRole(req.kind)
+	if !isWildcard && apiKey == -1 {
 		return false
 	}
 

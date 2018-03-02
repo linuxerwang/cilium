@@ -303,13 +303,7 @@ func (in *PortRuleHTTP) DeepCopy() *PortRuleHTTP {
 func (in *PortRuleKafka) DeepCopyInto(out *PortRuleKafka) {
 	*out = *in
 	if in.apiKeyInt != nil {
-		in, out := &in.apiKeyInt, &out.apiKeyInt
-		if *in == nil {
-			*out = nil
-		} else {
-			*out = new(int16)
-			**out = **in
-		}
+		out.apiKeyInt = in.apiKeyInt.DeepCopy()
 	}
 	if in.apiVersionInt != nil {
 		in, out := &in.apiVersionInt, &out.apiVersionInt

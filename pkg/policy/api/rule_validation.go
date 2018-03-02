@@ -112,17 +112,37 @@ func (e *EgressRule) sanitize() error {
 // TODO we need to add support to check
 // wildcard and prefix/suffix later on.
 func (kr *PortRuleKafka) Sanitize() error {
+	fmt.Printf("Manali in Sanitize")
+	log.Printf("Manali in Sanitize")
+	if (len(kr.APIKey) > 0) && (len(kr.Role) > 0) {
+		return fmt.Errorf("Cannot set both Role:%q and APIKey :%q together", kr.Role, kr.APIKey)
+	}
+
+	log.Printf("Manali in Sanitize len(kr.APIKey):%d (len(kr.Role):%d", len(kr.APIKey), (len(kr.Role)))
+
 	if len(kr.APIKey) > 0 {
 		n, ok := KafkaAPIKeyMap[strings.ToLower(kr.APIKey)]
 		if !ok {
 			return fmt.Errorf("invalid Kafka APIKey :%q", kr.APIKey)
 		}
-		kr.apiKeyInt = &n
+		kr.apiKeyInt = KafkaRole{n}
+		log.Printf("Manali in Sanitize kr.apiKeyInt[0] = n kr.apiKeyInt[0]:%d", kr.apiKeyInt[0])
 	}
 
+	if len(kr.Role) > 0 {
+		ok := kr.MapRoleToAPIKey()
+		//n, ok := KafkaAPIKeyMap[strings.ToLower(kr.APIKey)]
+		if !ok {
+			return fmt.Errorf("invalid Kafka APIKey :%q", kr.APIKey)
+		}
+
+	}
+
+	log.Printf("Manali after MapRoleToAPIKey")
 	if len(kr.APIVersion) > 0 {
 		n, err := strconv.ParseInt(kr.APIVersion, 10, 16)
 		if err != nil {
+			log.Printf("Manali returning invalid Kafka APIVersion :%q", kr.APIVersion)
 			return fmt.Errorf("invalid Kafka APIVersion :%q",
 				kr.APIVersion)
 		}
@@ -130,6 +150,7 @@ func (kr *PortRuleKafka) Sanitize() error {
 		kr.apiVersionInt = &n16
 	}
 
+	log.Printf("Manali after APIVersion:%q", kr.APIVersion)
 	if len(kr.Topic) > 0 {
 		if len(kr.Topic) > KafkaMaxTopicLen {
 			return fmt.Errorf("kafka topic exceeds maximum len of %d",
@@ -141,6 +162,7 @@ func (kr *PortRuleKafka) Sanitize() error {
 			return fmt.Errorf("invalid Kafka Topic name \"%s\"", kr.Topic)
 		}
 	}
+	log.Printf("Manali after Topic returning nil")
 	return nil
 }
 

@@ -11,8 +11,8 @@ redirect_debug_logs ${LOGS_DIR}
 
 set -ex
 
-log "${TEST_NAME} has been deprecated and replaced by test/runtime/kafka.go"
-exit 0
+#log "${TEST_NAME} has been deprecated and replaced by test/runtime/kafka.go"
+#exit 0
 
 function cleanup {
   cilium policy delete --all 2> /dev/null || true
@@ -132,12 +132,21 @@ function proxy_test {
   }
 }
 
+log "Before proxy_init"
 proxy_init
-policy_single_ingress
+log "After proxy_init"
 
+log "Before policy_single_ingress"
+policy_single_ingress
+log "After policy_single_ingress"
+
+log "wait_for_cilium_ep_gen starting..."
 wait_for_cilium_ep_gen
+log "wait_for_cilium_ep_gen ending..."
 cilium endpoint list
+log "proxy_test starting..."
 proxy_test
+log "proxy_test ending..."
 
 log "deleting all policies from Cilium"
 cilium policy delete --all 2> /dev/null || true

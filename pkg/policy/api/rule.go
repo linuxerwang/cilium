@@ -18,6 +18,7 @@ import (
 	"regexp"
 
 	"github.com/cilium/cilium/pkg/labels"
+	"strings"
 )
 
 // Rule is a policy rule which must be applied to all endpoints which match the
@@ -462,12 +463,30 @@ type PortRuleKafka struct {
 	// +optional
 	Topic string `json:"topic,omitempty"`
 
+	// Role is a case-insensitive string and describes a group of API keys
+	// necessary to perform certain higher level Kafka operations such as "produce"
+	// or "consume". An APIGroup automatically expands into all APIKeys required
+	// to perform the specified higher level operation.
+	//
+	// The following values are supported:
+	//  - "produce": Allow producing to the topics specified in the rule
+	//  - "consume": Allow consuming from the topics specified in the rule
+	//
+	// This field is incompatible with the APIKey field, either APIKey or Role
+	// may be specified.
+	//
+	// If omitted or empty, the field has no effect and the logic of the APIKey
+	// field applies.
+	//
+	// +optional
+	Role string `json:"Role,omitempty"`
+
 	// --------------------------------------------------------------------
 	// Private fields. These fields are used internally and are not exposed
 	// via the API.
 
 	// apiKeyInt is the integer representation of APIKey
-	apiKeyInt *int16
+	apiKeyInt KafkaRole
 
 	// apiVersionInt is the integer representation of APIVersion
 	apiVersionInt *int16
@@ -553,12 +572,26 @@ var KafkaReverseAPIKeyMap = map[int16]string{
 	33: "alterconfigs",         /* AlterConfigs */
 }
 
+type KafkaRole []int16
+
+func (f KafkaRole) DeepCopy() KafkaRole {
+	copyRole := make(KafkaRole, KafkaMaxAPIKeySupported)
+	copy(copyRole, f)
+	return copyRole
+}
+
 // KafkaMaxTopicLen is the maximum character len of a topic.
 // Older Kafka versions had longer topic lengths of 255, in Kafka 0.10 version
 // the length was changed from 255 to 249. For compatibility reasons we are
 // using 255
 const (
 	KafkaMaxTopicLen = 255
+)
+
+// KafkaMaxAPIKeySupported is apiKey supported to expand a generic "produce" / "consume"
+// role to a set of low level apiKeys.
+const (
+	KafkaMaxAPIKeySupported = 11
 )
 
 // KafkaMaxTopicVal is the maximum value of supported API Keys in KafkaAPIKeyMap
@@ -571,14 +604,28 @@ const (
 // in kafka topic name.
 var KafkaTopicValidChar = regexp.MustCompile(`^[a-zA-Z0-9\\._\\-]+$`)
 
-// GetAPIKey returns the APIKey as integer or the bool set to true if any API
+// CheckApiKeyRole returns the APIKey as integer or the bool set to true if any API
 // key is allowed
-func (kr *PortRuleKafka) GetAPIKey() (int16, bool) {
-	if kr.apiKeyInt == nil {
+func (kr *PortRuleKafka) CheckApiKeyRole(kind int16) (int16, bool) {
+	log.Printf("Manali in CheckApiKeyRole ")
+	if len(kr.apiKeyInt) == 0 {
+		log.Printf("Manali in CheckApiKeyRole returning 0 true as len(kr.apiKeyInt) :0 ")
 		return 0, true
 	}
 
-	return *kr.apiKeyInt, false
+	if len(kr.APIKey) > 0 {
+		log.Printf("Manali in CheckApiKeyRole returning  kr.apiKeyInt[0]:%d,false", kr.apiKeyInt[0])
+		return kr.apiKeyInt[0], false
+	}
+	// Check kind
+	for _, apiKey := range kr.apiKeyInt {
+		if apiKey == kind {
+			log.Printf("Manali in CheckApiKeyRole returning apiKey:%d,false", apiKey)
+			return apiKey, false
+		}
+	}
+	log.Printf("Manali in CheckApiKeyRole returning -1 false")
+	return -1, false
 }
 
 // GetAPIVersion returns the APIVersion as integer or the bool set to true if
@@ -589,4 +636,31 @@ func (kr *PortRuleKafka) GetAPIVersion() (int16, bool) {
 	}
 
 	return *kr.apiVersionInt, false
+}
+
+// MapRoleToAPIKey maps the Role to the low level set of APIKeys for that role
+func (kr *PortRuleKafka) MapRoleToAPIKey() bool {
+	if len(kr.Role) <= 0 || len(kr.apiKeyInt) > 0 {
+		return false
+	}
+
+	log.Printf("Manali in MapRoleToAPIKey kr.apiKeyInt:%q kr.Role %q", kr.apiKeyInt, kr.Role)
+	// Fill the kr.apiKeyInt array based on the Role.
+	// For produce role, we need to add mandatory apiKeys produce, metadata and
+	// apiversions. While for consume, we need to add mandatory apiKeys like
+	// fetch, offsets, offsetcommit, offsetfetch, apiversions, metadata,
+	// findcoordinator, joingroup, heartbeat,
+	// leavegroup and syncgroup.
+	switch strings.ToLower(kr.Role) {
+	case "produce":
+		kr.apiKeyInt = KafkaRole{0, 3, 18}
+		return true
+	case "consume":
+		kr.apiKeyInt = KafkaRole{1, 2, 3, 8, 9, 18, 10, 11, 12, 13, 14}
+		return true
+	default:
+		return false
+	}
+
+	return false
 }

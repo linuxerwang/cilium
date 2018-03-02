@@ -65,6 +65,7 @@ func (k *PortRuleKafka) Exists(rules L7Rules) bool {
 
 // Equal returns true if both rules are equal
 func (k *PortRuleKafka) Equal(o PortRuleKafka) bool {
+	//TODO
 	return k.APIVersion == o.APIVersion && k.APIKey == o.APIKey && k.Topic == o.Topic
 }
 
