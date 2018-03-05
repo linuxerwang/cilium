@@ -31,6 +31,7 @@ import (
 	client "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/clientv3/concurrency"
 	clientyaml "github.com/coreos/etcd/clientv3/yaml"
+	v3rpcErrors "github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 	"github.com/hashicorp/go-version"
 	"github.com/sirupsen/logrus"
 	ctx "golang.org/x/net/context"
@@ -487,11 +488,11 @@ func (e *etcdClient) Watch(w *Watcher) {
 
 	recreateWatcher:
 		lastRev++
-
+	recreateWatcherWithRev:
 		log.WithFields(logrus.Fields{
 			fieldRev:     lastRev,
 			fieldWatcher: w,
-		}).Debugf("Starting to watch %s", w.prefix)
+		}).Debugf("Starting to watch %s from revision %d", w.prefix, lastRev)
 		etcdWatch := e.client.Watch(ctx.Background(), w.prefix,
 			client.WithPrefix(), client.WithRev(lastRev))
 		for {
@@ -511,7 +512,13 @@ func (e *etcdClient) Watch(w *Watcher) {
 					log.WithFields(logrus.Fields{
 						fieldRev:     lastRev,
 						fieldWatcher: w,
-					}).WithError(err).Warningf("etcd watcher received error")
+					}).WithError(err).Warning("etcd watcher received error")
+
+					if err == v3rpcErrors.ErrCompacted {
+						lastRev = r.CompactRevision
+						goto recreateWatcherWithRev
+					}
+
 					continue
 				}
 
