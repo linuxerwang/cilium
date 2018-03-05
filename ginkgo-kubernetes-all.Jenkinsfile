@@ -29,33 +29,6 @@ pipeline {
                 sh 'cd ${TESTDIR}; K8S_VERSION=1.9 vagrant up --no-provision'
             }
         }
-        stage('BDD-Test-k8s') {
-            environment {
-                GOPATH="${WORKSPACE}"
-                TESTDIR="${WORKSPACE}/${PROJ_PATH}/test"
-            }
-            options {
-                timeout(time: 60, unit: 'MINUTES')
-            }
-            steps {
-                parallel(
-                    "K8s-1.7":{
-                        sh 'cd ${TESTDIR}; K8S_VERSION=1.7 ginkgo --focus=" K8s*" -v -noColor'
-                    },
-                    "K8s-1.9":{
-                        sh 'cd ${TESTDIR}; K8S_VERSION=1.9 ginkgo --focus=" K8s*" -v -noColor'
-                    },
-                )
-            }
-            post {
-                always {
-                    junit 'test/*.xml'
-                    sh 'cd test/; ./post_build_agent.sh || true'
-                    sh 'cd test/; ./archive_test_results.sh || true'
-                    archiveArtifacts artifacts: "test_results_${JOB_BASE_NAME}_${BUILD_NUMBER}.tar", allowEmptyArchive: true
-                }
-            }
-        }
         stage('Non-release-k8s-versions') {
             environment {
                 GOPATH="${WORKSPACE}"
@@ -71,6 +44,33 @@ pipeline {
                     },
                     "K8s-1.11":{
                         sh 'cd ${TESTDIR}; K8S_VERSION=1.11 ginkgo --focus=" K8s*" -v -noColor'
+                    },
+                )
+            }
+            post {
+                always {
+                    junit 'test/*.xml'
+                    sh 'cd test/; ./post_build_agent.sh || true'
+                    sh 'cd test/; ./archive_test_results.sh || true'
+                    archiveArtifacts artifacts: "test_results_${JOB_BASE_NAME}_${BUILD_NUMBER}.tar", allowEmptyArchive: true
+                }
+            }
+        }
+        stage('BDD-Test-k8s') {
+            environment {
+                GOPATH="${WORKSPACE}"
+                TESTDIR="${WORKSPACE}/${PROJ_PATH}/test"
+            }
+            options {
+                timeout(time: 60, unit: 'MINUTES')
+            }
+            steps {
+                parallel(
+                    "K8s-1.7":{
+                        sh 'cd ${TESTDIR}; K8S_VERSION=1.7 ginkgo --focus=" K8s*" -v -noColor'
+                    },
+                    "K8s-1.9":{
+                        sh 'cd ${TESTDIR}; K8S_VERSION=1.9 ginkgo --focus=" K8s*" -v -noColor'
                     },
                 )
             }
